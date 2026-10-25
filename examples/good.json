@@ -1,0 +1,32 @@
+{
+ "gateway": "payments-gw",
+ "endpoint_type": "PUBLIC",
+ "deployments": [
+  {
+   "path_prefix": "/pay",
+   "logging": true,
+   "routes": [
+    {
+     "path": "/charge",
+     "methods": ["POST"],
+     "auth": "JWT",
+     "cors": {"allowed_origins": ["https://app.example.com"], "allow_credentials": true},
+     "rate_limit_rps": 50,
+     "quota_per_day": 100000,
+     "request_validation": true,
+     "backend": {"protocol": "https"}
+    },
+    {
+     "path": "/status",
+     "methods": ["GET"],
+     "auth": "OAUTH2",
+     "cors": {"allowed_origins": ["https://app.example.com"]},
+     "rate_limit_rps": 100,
+     "quota_per_day": 500000,
+     "request_validation": true,
+     "backend": {"protocol": "https"}
+    }
+   ]
+  }
+ ]
+}
