@@ -1,0 +1,21 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: pip install -e .
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+      - name: CLI smoke (good gateway is clean)
+        run: apigw-audit examples/good.json --fail-on low
+      - name: CLI smoke (risky gateway is flagged)
+        run: apigw-audit examples/risky.json --output report.json --fail-on high || test $? -eq 2
