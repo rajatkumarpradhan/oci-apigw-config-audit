@@ -19,3 +19,7 @@ jobs:
         run: apigw-audit examples/good.json --fail-on low
       - name: CLI smoke (risky gateway is flagged)
         run: apigw-audit examples/risky.json --output report.json --fail-on high || test $? -eq 2
+      - name: CLI smoke (import round trip)
+        run: |
+          apigw-audit import examples/export.json -o /tmp/gateway.json
+          apigw-audit /tmp/gateway.json --fail-on low
