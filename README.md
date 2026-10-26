@@ -1,6 +1,6 @@
 # oci-apigw-config-audit
 
-Offline API Gateway deployment configuration auditor. It reads one JSON file describing a gateway, its deployments and routes (an export you already have), applies 10 rules and prints findings by severity. It can also write a JSON report.
+Offline API Gateway deployment configuration auditor. It reads one JSON file describing a gateway, its deployments and routes (an export you already have), applies 10 rules and prints findings by severity. It can also write a JSON report. An `import` subcommand converts an OCI-style gateway export into the gateway schema.
 
 This project is a portfolio piece. It uses its own simplified schema (not the OCI API Gateway API shape), works only on synthetic or exported files, and has not been validated against a live OCI tenancy. Findings are review priorities from offline data, not a security verdict: the auditor makes no API calls and verifies nothing against a live gateway. A clean result is not a security certification.
 
@@ -15,6 +15,28 @@ apigw-audit gateway.json --fail-on high            # exit 2 if any finding is hi
 ```
 
 Exit codes: 0 ok, 1 bad input, 2 a finding at or above `--fail-on`.
+
+## Import from an export
+
+`apigw-audit import` converts an OCI-style gateway + deployment listing into this tool's gateway JSON, so a real export can be audited without rewriting it by hand. It reads a file you already have; it makes no API calls.
+
+```
+apigw-audit import examples/export.json                    # writes gateway JSON to stdout
+apigw-audit import examples/export.json -o gateway.json
+apigw-audit gateway.json
+```
+
+Accepted shape: an object with `display-name`, `endpoint-type` and `deployments`, optionally inside a `data` envelope (the shape of `oci api-gateway gateway get` output with deployments embedded). Each deployment needs `path-prefix` and a `specification` with `logging-policies` and `routes`; each route needs a `path` and a `backend.url` with an http(s) scheme. Extra OCI fields are ignored.
+
+Mapping decisions, all documented here because they are simplifications:
+
+- `request-policies.authentication.type` maps `JWT_AUTHENTICATION` -> `JWT` and `CUSTOM_AUTHENTICATION` -> `FUNCTIONS`; anything else or absent -> `NONE`.
+- `rate-limiting.rate-in-requests-per-second` -> `rate_limit_rps`.
+- Usage-plan quotas map only when `reset-period` is `DAY` (first matching plan wins, applied to every route in the deployment). WEEK/MONTH quotas stay unset on purpose, so AG010 can flag them.
+- Logging is on when either the access or the execution log policy is enabled.
+- `body-validation.required` -> `request_validation`.
+
+Routes that cannot be mapped (missing path, backend url without an http(s) scheme, non-object rows) stop the import, and every bad route is reported as `deployments[i].routes[j]` with a best-effort line number (the line where that route's path or backend url appears; the row index is always exact).
 
 ## Input schema (simplified, project-specific)
 
@@ -71,7 +93,8 @@ Exit codes: 0 ok, 1 bad input, 2 a finding at or above `--fail-on`.
 - Offline only: no API calls, no live gateway checks. Whether a route is actually reachable or a policy actually enforced cannot be verified from a file.
 - Rules check the configuration as written. AG001 cannot tell whether an upstream proxy adds authentication the file does not show.
 - CORS findings reflect the policy as configured, not what browsers will do with it.
-- The schema is a simplification: real OCI API Gateway exports carry more fields (usage plans, mutual TLS, header transforms, stock response routes) that this model ignores.
+- The schema is a simplification: real OCI API Gateway exports carry more fields (mutual TLS, header transforms, stock response routes) that this model ignores.
+- The importer validates shape, not meaning: it passes mapped fields through and the audit rules judge them. Importer line numbers are best-effort (a text search for the route's path or backend url), not a real JSON parse position.
 
 ## Development
 
@@ -79,4 +102,4 @@ Exit codes: 0 ok, 1 bad input, 2 a finding at or above `--fail-on`.
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
-Tests cover each rule and boundary (rate limit at the smallest allowed value vs absent, quota at 1 vs absent, method set at exactly 5 vs 6, wildcard origin among specific origins, private vs public gateways for AG001, AG002 taking precedence over AG006), validation errors and CLI exit codes. `examples/good.json` must produce zero findings and `examples/risky.json` must trigger all 10 rules. CI runs the suite on Python 3.10, 3.11 and 3.12 plus CLI smoke checks on both examples.
+Tests cover each rule and boundary (rate limit at the smallest allowed value vs absent, quota at 1 vs absent, method set at exactly 5 vs 6, wildcard origin among specific origins, private vs public gateways for AG001, AG002 taking precedence over AG006), validation errors, CLI exit codes and the importer (OCI-style conversion, envelope variants, quota and logging mapping, malformed rows with line numbers). `examples/good.json` must produce zero findings and `examples/risky.json` must trigger all 10 rules. CI runs the suite on Python 3.10, 3.11 and 3.12 plus CLI smoke checks on both examples.
