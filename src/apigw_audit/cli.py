@@ -4,14 +4,39 @@ import argparse
 import json
 import sys
 
-from . import analysis, model
+from . import analysis, importer, model
 
 DISCLAIMER = ("Review priorities from offline API gateway configuration data. No API calls are made and nothing is "
               "verified against a live gateway or cloud provider; a clean result is not a security certification.")
 
 
+def _import_main(argv) -> int:
+    ap = argparse.ArgumentParser(prog="apigw-audit import",
+                                 description="Convert an OCI-style gateway export into the simplified gateway JSON. "
+                                             "Reads a file you already have; makes no API calls.")
+    ap.add_argument("export")
+    ap.add_argument("--output", "-o", help="write the gateway JSON here (default stdout)")
+    a = ap.parse_args(argv)
+    try:
+        gw = importer.load_export(a.export)
+    except (OSError, json.JSONDecodeError, importer.ImportError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    out = json.dumps(gw, indent=1) + "\n"
+    if a.output:
+        with open(a.output, "w", encoding="utf-8") as fh:
+            fh.write(out)
+        n = sum(len(d["routes"]) for d in gw["deployments"])
+        print(f"wrote {n} route(s) across {len(gw['deployments'])} deployment(s) to {a.output}", file=sys.stderr)
+    else:
+        sys.stdout.write(out)
+    return 0
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["import"]:
+        return _import_main(argv[1:])
     ap = argparse.ArgumentParser(prog="apigw-audit",
                                  description="Offline API gateway deployment configuration audit (synthetic/exported data).")
     ap.add_argument("gateway")
