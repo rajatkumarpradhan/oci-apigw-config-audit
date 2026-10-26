@@ -1,0 +1,48 @@
+{
+ "data": {
+  "id": "ocid1.apigateway.oc1..example",
+  "display-name": "payments-gw",
+  "endpoint-type": "PUBLIC",
+  "lifecycle-state": "ACTIVE",
+  "deployments": [
+   {
+    "id": "ocid1.apideployment.oc1..example",
+    "path-prefix": "/pay",
+    "lifecycle-state": "ACTIVE",
+    "specification": {
+     "usage-plans": [
+      {"name": "default", "quota": {"number-of-requests": 250000, "reset-period": "DAY", "operation-on-breach": "REJECT"}}
+     ],
+     "logging-policies": {
+      "access-log": {"is-enabled": true},
+      "execution-log": {"is-enabled": true}
+     },
+     "routes": [
+      {
+       "path": "/charge",
+       "methods": ["POST"],
+       "backend": {"type": "HTTP_BACKEND", "url": "https://backend.internal/charge", "connect-timeout-in-seconds": 10},
+       "request-policies": {
+        "authentication": {"type": "JWT_AUTHENTICATION", "audiences": ["payments"]},
+        "cors": {"allowed-origins": ["https://app.example.com"], "is-allow-credentials-enabled": true},
+        "rate-limiting": {"rate-in-requests-per-second": 50},
+        "body-validation": {"required": true, "content": {}}
+       }
+      },
+      {
+       "path": "/status",
+       "methods": ["GET"],
+       "backend": {"type": "HTTP_BACKEND", "url": "https://backend.internal/status"},
+       "request-policies": {
+        "authentication": {"type": "CUSTOM_AUTHENTICATION", "function-id": "ocid1.fnfunc.oc1..example"},
+        "cors": {"allowed-origins": ["https://app.example.com"]},
+        "rate-limiting": {"rate-in-requests-per-second": 100},
+        "body-validation": {"required": true}
+       }
+      }
+     ]
+    }
+   }
+  ]
+ }
+}
